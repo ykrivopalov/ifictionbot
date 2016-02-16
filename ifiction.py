@@ -252,9 +252,7 @@ class MainDialog:
         elif text == self._HOWTO:
             await self._sender.sendMessage(HELP_MESSAGE, parse_mode='Markdown')
         else:
-            debug('MainDialog send')
             await self._sender.sendMessage('Choose section', reply_markup=self._KEYBOARD)
-            debug('MainDialog after send')
 
         return DIALOG_MAIN, {}
 
@@ -313,20 +311,19 @@ class BrowsingDialog:
         text = msg['text']
         if text == self._FORWARD:
             items = self._iterator.next()
-            msg = self._make_items_list(items)
-            await self._sender.sendMessage(msg, reply_markup=self._make_keyboard())
-            return DIALOG_BROWSING, {}
         elif text == self._BACKWARD:
             items = self._iterator.prev()
-            msg = self._make_items_list(items)
-            await self._sender.sendMessage(msg, reply_markup=self._make_keyboard())
-            return DIALOG_BROWSING, {}
         elif text == self._CANCEL:
             return DIALOG_MAIN, {}
         elif text.startswith('/'):
             return DIALOG_GAME, {'game': text[1:]}
+        else:
+            items = self._iterator.get_page()
 
+        msg = self._make_items_list(items)
+        await self._sender.sendMessage(msg, reply_markup=self._make_keyboard())
         return DIALOG_BROWSING, {}
+
 
 class LastPlayedDialog:
     _CANCEL = 'Return to the main menu'
@@ -340,18 +337,21 @@ class LastPlayedDialog:
     async def start(self, greetings=False):
         debug('LastPlayedDialog start %s', greetings)
         if greetings:
-            debug('last played %s', self._state)
-            msg_lines = ['Recently played games:']
-            for g in self._state['games']:
-                debug('get game %s', self._games_db.get_game(g))
-                game = self._games_db.get_game(g)
-                if game:
-                    msg_lines.append('/{} - {}'.format(*game))
-                else:
-                    msg_lines.append('{} - game no more accessible'.format(g))
+            await self._send_last_played_games()
 
-            debug('send msg %s', msg_lines)
-            await self._sender.sendMessage('\n'.join(msg_lines), reply_markup=self._KEYBOARD)
+    async def _send_last_played_games(self):
+        debug('last played %s', self._state)
+        msg_lines = ['Recently played games:']
+        for g in self._state['games']:
+            debug('get game %s', self._games_db.get_game(g))
+            game = self._games_db.get_game(g)
+            if game:
+                msg_lines.append('/{} - {}'.format(*game))
+            else:
+                msg_lines.append('{} - game no more accessible'.format(g))
+
+        debug('send msg %s', msg_lines)
+        await self._sender.sendMessage('\n'.join(msg_lines), reply_markup=self._KEYBOARD)
 
     def stop(self):
         pass
@@ -368,6 +368,7 @@ class LastPlayedDialog:
         elif text.startswith('/'):
             return DIALOG_GAME, {'game': text[1:]}
         else:
+            await self._send_last_played_games()
             return DIALOG_LAST_PLAYED, {}
 
 
@@ -543,7 +544,6 @@ class Session(telepot.helper.ChatHandler):
                 await self.sender.sendMessage(HELP_MESSAGE, parse_mode='Markdown')
             else:
                 new_state, args = await self._dialogs[self._state['current']].on_message(msg)
-                debug('Session after on_message')
                 if new_state != self._state['current']:
                     if new_state == DIALOG_GAME:
                         add_to_recently_played(self._state['recently_played'], args['game'])
