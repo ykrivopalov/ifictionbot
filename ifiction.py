@@ -433,13 +433,20 @@ class GameDialog:
             return
 
         text = msg['text']
+        if text.startswith('/command'):
+            text = text[9:]
+        elif text.startswith('/c'):
+            text = text[3:]
+
         if text.lower() in ['save', 'restore', 'quit', 'q']:
             await self._sender.sendMessage('This command currently unsupported')
             return DIALOG_GAME, {}
         elif text == self._RETURN:
             return DIALOG_MAIN, {}
+        elif not text:
+            return DIALOG_GAME, {}
         else:
-            await self._game.command(msg['text'])
+            await self._game.command(text)
             return DIALOG_GAME, {}
 
 
@@ -542,19 +549,37 @@ class Session(telepot.helper.ChatHandler):
             debug('chat {}: recv from user "{}"'.format(self._chat_id, text))
             if text == '/help':
                 await self.sender.sendMessage(HELP_MESSAGE, parse_mode='Markdown')
+            elif text.startswith('/game'):
+                game = text[6:]
+                if not game:
+                    await self.sender.sendMessage(
+                        'Please spicify valid game name. Your can find it through game browser')
+                else:
+                    await self._apply_state(DIALOG_GAME, {'game': game})
+            elif text.startswith('/command') or text.startswith('/c'):
+                if self._state['current'] == DIALOG_GAME:
+                    await self._pass_message(msg)
+                else:
+                    await self.sender.sendMessage('This command works only when game opened')
             else:
-                new_state, args = await self._dialogs[self._state['current']].on_message(msg)
-                if new_state != self._state['current']:
-                    if new_state == DIALOG_GAME:
-                        add_to_recently_played(self._state['recently_played'], args['game'])
-
-                    self._dialogs[self._state['current']].stop()
-                    self._state['current'] = new_state
-                    await self._dialogs[self._state['current']].start(**args, greetings=True)
+                await self._pass_message(msg)
 
         except Exception as e:
             error('chat {}: on_message error {}'.format(self._chat_id, e))
             raise
+
+    async def _pass_message(self, msg):
+        new_state, args = await self._dialogs[self._state['current']].on_message(msg)
+        if new_state != self._state['current']:
+            await self._apply_state(new_state, args)
+
+    async def _apply_state(self, state, args):
+        if state == DIALOG_GAME:
+            add_to_recently_played(self._state['recently_played'], args['game'])
+
+        self._dialogs[self._state['current']].stop()
+        self._state['current'] = state
+        await self._dialogs[self._state['current']].start(**args, greetings=True)
 
     def on_close(self, exception):
         info('chat {}: on_close {}'.format(self._chat_id, exception))
