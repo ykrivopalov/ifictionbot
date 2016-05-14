@@ -12,8 +12,7 @@ from logging import debug, info, error
 import logging
 
 
-from telepot.delegate import per_chat_id
-from telepot.async.delegate import create_open
+from telepot.async.delegate import create_open, per_chat_id
 import telepot
 
 TOKEN = sys.argv[1]
@@ -496,7 +495,7 @@ def add_to_recently_played(arr, val):
     arr.insert(0, val)
 
 
-class Session(telepot.helper.ChatHandler):
+class Session(telepot.async.helper.ChatHandler):
     _DEFAULT_STATE = {'current': DIALOG_MAIN,
                       'recently_played': [],
                       DIALOG_MAIN: {},
