@@ -240,7 +240,7 @@ class MainDialog:
 
     async def on_message(self, msg):
         debug('MainDialog on_message')
-        content_type = telepot.glance2(msg)[0]
+        content_type = telepot.glance(msg)[0]
         if content_type != 'text':
             return
 
@@ -304,7 +304,7 @@ class BrowsingDialog:
 
     async def on_message(self, msg):
         debug('BrowsingDialog on_message %s', msg)
-        content_type = telepot.glance2(msg)[0]
+        content_type = telepot.glance(msg)[0]
         if content_type != 'text':
             return DIALOG_BROWSING, {}
 
@@ -357,7 +357,7 @@ class LastPlayedDialog:
         pass
 
     async def on_message(self, msg):
-        content_type = telepot.glance2(msg)[0]
+        content_type = telepot.glance(msg)[0]
         if content_type != 'text':
             return
 
@@ -428,7 +428,7 @@ class GameDialog:
 
     async def on_message(self, msg):
         debug('GameDialog on_message')
-        content_type = telepot.glance2(msg)[0]
+        content_type = telepot.glance(msg)[0]
         if content_type != 'text':
             return
 
@@ -528,7 +528,7 @@ class Session(telepot.helper.ChatHandler):
             info('chat {}: open'.format(self._chat_id))
             self._registry.register(self._chat_id, self)
 
-            content_type = telepot.glance2(msg)[0]
+            content_type = telepot.glance(msg)[0]
             if content_type == 'text' and msg['text'] == '/start':
                 self._state['current'] = DIALOG_MAIN
 
@@ -540,7 +540,7 @@ class Session(telepot.helper.ChatHandler):
 
     async def on_message(self, msg):
         try:
-            content_type = telepot.glance2(msg)[0]
+            content_type = telepot.glance(msg)[0]
 
             if content_type != 'text':
                 return
@@ -610,7 +610,7 @@ def main():
         [(per_chat_id(), create_open(Session, loop=loop, timeout=20 * 60, registry=registry))],
         loop
     )
-    loop.create_task(bot.messageLoop())
+    loop.create_task(bot.message_loop())
 
     def sigint_handler():
         info('SIGINT')
