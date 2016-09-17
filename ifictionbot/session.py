@@ -2,20 +2,13 @@ import asyncio
 import math
 import os
 import shelve
-import signal
 import sqlite3
-import sys
 import time
-from concurrent.futures import CancelledError
 
 from logging import debug, info, error
-import logging
 
-
-from telepot.aio.delegate import create_open, pave_event_space, per_chat_id
 import telepot
-
-TOKEN = sys.argv[1]
+import telepot.aio
 
 HELP_MESSAGE = """This bot allows you to play interactive fiction.
 
@@ -371,20 +364,20 @@ class LastPlayedDialog:
             return DIALOG_LAST_PLAYED, {}
 
 
-def init_user_dir(user_id):
-    data_path = os.path.abspath('users/{}'.format(user_id))
-    if not os.path.exists(data_path):
-        os.makedirs(data_path)
+def init_user_dir(data_path, user_id):
+    user_path = os.path.abspath('{}/users/{}'.format(data_path, user_id))
+    if not os.path.exists(user_path):
+        os.makedirs(user_path)
 
 
-def init_game_dir(user_id, game):
-    source_game_path = os.path.abspath('data/{}.gam'.format(game))
-    data_path = os.path.abspath('users/{}/{}'.format(user_id, game))
-    if not os.path.exists(data_path):
-        os.makedirs(data_path)
-    game_path = '{}/{}.gam'.format(data_path, game)
+def init_game_dir(data_path, user_id, game):
+    source_game_path = os.path.abspath('{}/games/{}.gam'.format(data_path, game))
+    game_data_path = os.path.abspath('{}/users/{}/{}'.format(data_path, user_id, game))
+    if not os.path.exists(game_data_path):
+        os.makedirs(game_data_path)
+    game_path = '{}/{}.gam'.format(game_data_path, game)
     os.system('ln -sf {} {}'.format(source_game_path, game_path))
-    return data_path
+    return game_data_path
 
 
 class GameDialog:
@@ -392,12 +385,13 @@ class GameDialog:
     _KEYBOARD = {'keyboard': [['Status', 'Undo', 'Restart'], [_RETURN]],
                  'resize_keyboard': True}
 
-    def __init__(self, state, last_played, loop, chat_id, sender, games_db):
+    def __init__(self, state, last_played, loop, chat_id, sender, data_path, games_db):
         self._state = state
         self._last_played = last_played
         self._loop = loop
         self._chat_id = chat_id
         self._sender = sender
+        self._data_path = data_path
         self._games_db = games_db
         self._game = None
         self._read_loop_task = None
@@ -410,7 +404,7 @@ class GameDialog:
 
         self._last_played['games'] = unique_list_prepend(self._last_played['games'], game)[:10]
 
-        data_path = init_game_dir(self._chat_id, game)
+        data_path = init_game_dir(self._data_path, self._chat_id, game)
         self._game = Frob(self._chat_id, self._sender)
         await self._game.start(data_path, game)
         self._read_loop_task = self._loop.create_task(self._game.read_loop())
@@ -450,8 +444,8 @@ class GameDialog:
 
 
 class UserDB:
-    def __init__(self, user_id, init_state):
-        self._db = shelve.open('users/{}/user.shlv'.format(user_id))
+    def __init__(self, data_path, user_id, init_state):
+        self._db = shelve.open('{}/users/{}/user.shlv'.format(data_path, user_id))
         self._user_id = user_id
 
         for key, value in init_state.items():
@@ -503,12 +497,12 @@ class Session(telepot.aio.helper.ChatHandler):
                       DIALOG_LAST_PLAYED: {'games': []},
                       DIALOG_BROWSING: {}}
 
-    def __init__(self, seed_tuple, loop, registry, **kwargs):
+    def __init__(self, seed_tuple, data_path, loop, registry, **kwargs):
         super(Session, self).__init__(seed_tuple, **kwargs)
         self._chat_id = seed_tuple[1]['chat']['id']
-        init_user_dir(self._chat_id)
-        self._user_db = UserDB(self._chat_id, self._DEFAULT_STATE)
-        games_db = GamesDB('data/ifarchive.db')
+        init_user_dir(data_path, self._chat_id)
+        self._user_db = UserDB(data_path, self._chat_id, self._DEFAULT_STATE)
+        games_db = GamesDB(data_path + '/games/ifarchive.db')
         self._state = self._user_db.current_state()
         self._dialogs = {
             DIALOG_MAIN: MainDialog(self.sender),
@@ -518,7 +512,7 @@ class Session(telepot.aio.helper.ChatHandler):
                 self._state[DIALOG_LAST_PLAYED], self.sender, games_db),
             DIALOG_GAME: GameDialog(
                 self._state[DIALOG_GAME], self._state[DIALOG_LAST_PLAYED], loop,
-                self._chat_id, self.sender, games_db)
+                self._chat_id, self.sender, data_path, games_db)
         }
         self._registry = registry
 
@@ -586,51 +580,3 @@ class Session(telepot.aio.helper.ChatHandler):
             d.stop()
         self._user_db.save_state(self._state)
         self._registry.unregister(self._chat_id)
-
-
-formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
-
-stream_logger = logging.StreamHandler()
-stream_logger.setFormatter(formatter)
-stream_logger.setLevel(logging.DEBUG)
-
-file_logger = logging.FileHandler(filename='ifictionbot.log')
-file_logger.setFormatter(formatter)
-file_logger.setLevel(logging.DEBUG)
-
-logging.basicConfig(level=logging.DEBUG, handlers=[stream_logger, file_logger])
-
-
-def main():
-    loop = asyncio.get_event_loop()
-    registry = SessionRegistry()
-    bot = telepot.aio.DelegatorBot(
-        TOKEN,
-        [pave_event_space()(
-            per_chat_id(), create_open, Session, loop=loop, timeout=20 * 60, registry=registry)],
-        loop
-    )
-    loop.create_task(bot.message_loop())
-
-    def sigint_handler():
-        info('SIGINT')
-        try:
-            registry.close_all()
-        except Exception as e:
-            logging.error(e)
-        finally:
-            loop.stop()
-
-    loop.add_signal_handler(signal.SIGINT, sigint_handler)
-
-    info('Listening ...')
-    try:
-        loop.run_forever()
-    except CancelledError:
-        info('Cancelled')
-    else:
-        info('Completed')
-    finally:
-        loop.close()
-
-main()
