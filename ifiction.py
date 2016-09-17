@@ -12,7 +12,7 @@ from logging import debug, info, error
 import logging
 
 
-from telepot.async.delegate import create_open, per_chat_id
+from telepot.aio.delegate import create_open, pave_event_space, per_chat_id
 import telepot
 
 TOKEN = sys.argv[1]
@@ -495,7 +495,7 @@ def add_to_recently_played(arr, val):
     arr.insert(0, val)
 
 
-class Session(telepot.async.helper.ChatHandler):
+class Session(telepot.aio.helper.ChatHandler):
     _DEFAULT_STATE = {'current': DIALOG_MAIN,
                       'recently_played': [],
                       DIALOG_MAIN: {},
@@ -503,8 +503,8 @@ class Session(telepot.async.helper.ChatHandler):
                       DIALOG_LAST_PLAYED: {'games': []},
                       DIALOG_BROWSING: {}}
 
-    def __init__(self, seed_tuple, loop, timeout, registry):
-        super(Session, self).__init__(seed_tuple, timeout)
+    def __init__(self, seed_tuple, loop, registry, **kwargs):
+        super(Session, self).__init__(seed_tuple, **kwargs)
         self._chat_id = seed_tuple[1]['chat']['id']
         init_user_dir(self._chat_id)
         self._user_db = UserDB(self._chat_id, self._DEFAULT_STATE)
@@ -604,9 +604,10 @@ logging.basicConfig(level=logging.DEBUG, handlers=[stream_logger, file_logger])
 def main():
     loop = asyncio.get_event_loop()
     registry = SessionRegistry()
-    bot = telepot.async.DelegatorBot(
+    bot = telepot.aio.DelegatorBot(
         TOKEN,
-        [(per_chat_id(), create_open(Session, loop=loop, timeout=20 * 60, registry=registry))],
+        [pave_event_space()(
+            per_chat_id(), create_open, Session, loop=loop, timeout=20 * 60, registry=registry)],
         loop
     )
     loop.create_task(bot.message_loop())
