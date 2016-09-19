@@ -514,6 +514,7 @@ class Session(telepot.aio.helper.ChatHandler):
     def __init__(self, seed_tuple, data_path, loop, registry, **kwargs):
         super(Session, self).__init__(seed_tuple, **kwargs)
         self._chat_id = seed_tuple[1]['chat']['id']
+        info('Start session %s', self._chat_id)
         init_user_dir(data_path, self._chat_id)
         self._user_db = UserDB(data_path, self._chat_id, self._DEFAULT_STATE)
         games_db = GamesDB(data_path + '/games/ifarchive.db')
@@ -591,6 +592,7 @@ class Session(telepot.aio.helper.ChatHandler):
     async def on__idle(self, event):
         info('chat %s: on__idle %s', self._chat_id, event)
         self.close()
+        super().on__idle(event)
 
     def close(self):
         info('chat %s: close', self._chat_id)
