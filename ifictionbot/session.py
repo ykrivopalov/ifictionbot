@@ -107,7 +107,7 @@ class Frob:
         self._messages_to_skip = 0
 
     async def start(self, path, game):
-        info("chat {}: frob start".format(self._chat_id))
+        info("chat %s: frob start", self._chat_id)
         self._process = await asyncio.create_subprocess_shell(
             'frob -iplain {}/{}.gam'.format(path, game),
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
@@ -120,7 +120,7 @@ class Frob:
             self._messages_to_skip = 1  # ignore frobTADS intro msg
 
     def stop(self):
-        info("chat {}: frob stop".format(self._chat_id))
+        info("chat %s: frob stop", self._chat_id)
         if not self._process.returncode:  # process not finished yet
             self.save_game('last')
             time.sleep(1)  # TODO don't use sync wait
@@ -186,17 +186,17 @@ class Frob:
         return msgs
 
     def save_game(self, name):
-        info("chat {}: save game '{}'".format(self._chat_id, name))
+        info("chat %s: save game '%s'", self._chat_id, name)
         self._process.stdin.write(bytes('save\n', 'utf-8'))
         self._process.stdin.write(bytes(name + '\n', 'utf-8'))
 
     def restore_game(self, name):
-        info("chat {}: restore game '{}'".format(self._chat_id, name))
+        info("chat %s: restore game '%s'", self._chat_id, name)
         self._process.stdin.write(bytes('restore\n', 'utf-8'))
         self._process.stdin.write(bytes(name + '\n', 'utf-8'))
 
     def restart(self):
-        info("chat {}: restart".format(self._chat_id))
+        info("chat %s: restart", self._chat_id)
         self._process.stdin.write(bytes('restart\n', 'utf-8'))
         self._process.stdin.write(bytes('y\n', 'utf-8'))
 
@@ -204,7 +204,7 @@ class Frob:
         if self._process.returncode:
             await self._sender.sendMessage('Game not started')
         else:
-            info("chat {}: command '{}'".format(self._chat_id, cmd))
+            info("chat %s: command '%s'", self._chat_id, cmd)
             self._process.stdin.write(bytes(cmd + '\n', 'utf-8'))
 
 DIALOG_MAIN = 'main'
@@ -388,6 +388,7 @@ class SenderWithKeyboard:
     async def sendMessage(self, msg):
         return await self._sender.sendMessage(msg, reply_markup=self._keyboard)
 
+
 class GameDialog:
     _RETURN = 'Return to the main menu'
     _KEYBOARD = {'keyboard': [['Status', 'Undo', 'Restart'], [_RETURN]],
@@ -482,11 +483,11 @@ class SessionRegistry:
         self._sessions = {}
 
     def register(self, chat_id, session):
-        info('chat {}: session register'.format(chat_id))
+        info('chat %s: session register', chat_id)
         self._sessions[chat_id] = session
 
     def unregister(self, chat_id):
-        info('chat {}: session unregister'.format(chat_id))
+        info('chat %s: session unregister', chat_id)
         del self._sessions[chat_id]
 
     def close_all(self):
@@ -531,7 +532,7 @@ class Session(telepot.aio.helper.ChatHandler):
 
     async def open(self, msg, dummy_seed):
         try:
-            info('chat {}: open'.format(self._chat_id))
+            info('chat %s: open', self._chat_id)
             self._registry.register(self._chat_id, self)
 
             content_type = telepot.glance(msg)[0]
@@ -541,7 +542,7 @@ class Session(telepot.aio.helper.ChatHandler):
             await self._dialogs[self._state['current']].start()
             return False  # process initial message
         except Exception as e:
-            error('chat {}: open error {}'.format(self._chat_id, e))
+            error('chat %s: open error %s', self._chat_id, e)
             raise
 
     async def on_chat_message(self, msg):
@@ -552,7 +553,7 @@ class Session(telepot.aio.helper.ChatHandler):
                 return
 
             text = msg['text']
-            debug('chat {}: recv from user "{}"'.format(self._chat_id, text))
+            debug('chat %s: recv from user "%s"', self._chat_id, text)
             if text == '/help':
                 await self.sender.sendMessage(HELP_MESSAGE, parse_mode='Markdown')
             elif text.startswith('/game'):
@@ -571,7 +572,7 @@ class Session(telepot.aio.helper.ChatHandler):
                 await self._pass_message(msg)
 
         except Exception as e:
-            error('chat {}: on_message error {}: {}'.format(self._chat_id, msg, e))
+            error('chat %s: on_message error %s: %s', self._chat_id, msg, e)
             raise
 
     async def _pass_message(self, msg):
@@ -588,11 +589,11 @@ class Session(telepot.aio.helper.ChatHandler):
         await self._dialogs[self._state['current']].start(**args, greetings=True)
 
     async def on__idle(self, event):
-        info('chat {}: on__idle {}'.format(self._chat_id, event))
+        info('chat %s: on__idle %s', self._chat_id, event)
         self.close()
 
     def close(self):
-        info('chat {}: close'.format(self._chat_id))
+        info('chat %s: close', self._chat_id)
         for d in self._dialogs.values():
             d.stop()
         self._user_db.save_state(self._state)
