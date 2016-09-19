@@ -61,16 +61,16 @@ class GameIterator:
 
     def next(self):
         if self._current_page == self._count:
-            raise Exception("Can't iterate next")
-
-        self._current_page += 1
+            debug("Can't iterate next")
+        else:
+            self._current_page += 1
         return self.get_page()
 
     def prev(self):
         if self._current_page == 0:
-            raise Exception("Can't iterate prev")
-
-        self._current_page -= 1
+            debug("Can't iterate prev")
+        else:
+            self._current_page -= 1
         return self.get_page()
 
     def ways_to_iterate(self):
@@ -380,6 +380,14 @@ def init_game_dir(data_path, user_id, game):
     return game_data_path
 
 
+class SenderWithKeyboard:
+    def __init__(self, sender, keyboard):
+        self._sender = sender
+        self._keyboard = keyboard
+
+    async def sendMessage(self, msg):
+        return await self._sender.sendMessage(msg, reply_markup=self._keyboard)
+
 class GameDialog:
     _RETURN = 'Return to the main menu'
     _KEYBOARD = {'keyboard': [['Status', 'Undo', 'Restart'], [_RETURN]],
@@ -404,8 +412,9 @@ class GameDialog:
 
         self._last_played['games'] = unique_list_prepend(self._last_played['games'], game)[:10]
 
+        sender = SenderWithKeyboard(self._sender, self._KEYBOARD)
+        self._game = Frob(self._chat_id, sender)
         data_path = init_game_dir(self._data_path, self._chat_id, game)
-        self._game = Frob(self._chat_id, self._sender)
         await self._game.start(data_path, game)
         self._read_loop_task = self._loop.create_task(self._game.read_loop())
         if greetings:
@@ -432,7 +441,8 @@ class GameDialog:
             text = text[3:]
 
         if text.lower() in ['save', 'restore', 'quit', 'q']:
-            await self._sender.sendMessage('This command currently unsupported')
+            await self._sender.sendMessage('This command currently unsupported',
+                                           reply_markup=self._KEYBOARD)
             return DIALOG_GAME, {}
         elif text == self._RETURN:
             return DIALOG_MAIN, {}
