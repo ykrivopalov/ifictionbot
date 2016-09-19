@@ -473,6 +473,9 @@ class UserDB:
 
         self._db.sync()
 
+    def close(self):
+        self._db.close()
+
 
 class SessionRegistry:
     def __init__(self):
@@ -489,7 +492,7 @@ class SessionRegistry:
     def close_all(self):
         closing_sessions = dict(self._sessions)
         for session in closing_sessions.values():
-            session.on_close('Close from session registry')
+            session.close()
 
 
 def add_to_recently_played(arr, val):
@@ -541,7 +544,7 @@ class Session(telepot.aio.helper.ChatHandler):
             error('chat {}: open error {}'.format(self._chat_id, e))
             raise
 
-    async def on_message(self, msg):
+    async def on_chat_message(self, msg):
         try:
             content_type = telepot.glance(msg)[0]
 
@@ -568,7 +571,7 @@ class Session(telepot.aio.helper.ChatHandler):
                 await self._pass_message(msg)
 
         except Exception as e:
-            error('chat {}: on_message error {}'.format(self._chat_id, e))
+            error('chat {}: on_message error {}: {}'.format(self._chat_id, msg, e))
             raise
 
     async def _pass_message(self, msg):
@@ -584,9 +587,14 @@ class Session(telepot.aio.helper.ChatHandler):
         self._state['current'] = state
         await self._dialogs[self._state['current']].start(**args, greetings=True)
 
-    def on_close(self, exception):
-        info('chat {}: on_close {}'.format(self._chat_id, exception))
+    async def on__idle(self, event):
+        info('chat {}: on__idle {}'.format(self._chat_id, event))
+        self.close()
+
+    def close(self):
+        info('chat {}: close'.format(self._chat_id))
         for d in self._dialogs.values():
             d.stop()
         self._user_db.save_state(self._state)
+        self._user_db.close()
         self._registry.unregister(self._chat_id)
