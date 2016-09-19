@@ -8,5 +8,5 @@ setup(name='ifictionbot',
       author_email='ykrivopalov@yandex.ru',
       license='GPL3',
       packages=['ifictionbot'],
-      install_requires=["telepot"],
+      install_requires=["telepot >= 9.0, <= 10.0"],
       zip_safe=True)
